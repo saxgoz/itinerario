@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Itinerario con Mapa (Guadalajara)</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Awesome Markers (colores de marcadores) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css" />
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+
+  <style>
+    :root {
+      --sidebar-width: 420px;
+      --bg: #0f172a;
+      --panel: #111827;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #22c55e;
+      --border: #1f2937;
+    }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    }
+
+    header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,0,0,0.2);
+      backdrop-filter: saturate(180%) blur(6px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    header h1 {
+      font-size: 18px;
+      margin: 0;
+      font-weight: 600;
+    }
+
+    header .sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    #app {
+      display: grid;
+      grid-template-columns: 1fr var(--sidebar-width);
+      gap: 12px;
+      padding: 12px;
+      height: calc(100% - 62px);
+      box-sizing: border-box;
+    }
+
+    #map {
+      background: #0b1220;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      min-height: 60vh;
+      height: calc(100vh - 100px);
+      overflow: hidden;
+    }
+
+    #sidebar {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel);
+      overflow: auto;
+      max-height: calc(100vh - 100px);
+    }
+
+    .day-block {
+      border-bottom: 1px solid var(--border);
+    }
+
+    details.day-block > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: linear-gradient(to right, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    }
+
+    details.day-block > summary::-webkit-details-marker { display: none; }
+
+    .summary-title { font-weight: 600; }
+    .summary-sub { color: var(--muted); font-size: 12px; }
+
+    .color-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 8px;
+      border: 1px solid rgba(0,0,0,0.25);
+    }
+
+    .table-wrap {
+      padding: 0 12px 12px 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      background: #0b1220;
+      color: var(--muted);
+      text-align: left;
+      padding: 8px;
+      border-bottom: 1px solid var(--border);
+      z-index: 1;
+    }
+
+    tbody td {
+      padding: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr:hover {
+      background: rgba(34,197,94,0.08);
+    }
+
+    .actions a, .actions button {
+      color: #93c5fd;
+      text-decoration: none;
+      background: transparent;
+      border: 1px solid #1f2937;
+      border-radius: 6px;
+      padding: 6px 8px;
+      margin-right: 6px;
+      cursor: pointer;
+    }
+
+    .actions a:hover, .actions button:hover {
+      background: rgba(147,197,253,0.08);
+    }
+
+    @media (max-width: 980px) {
+      #app {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+      #map {
+        height: 60vh;
+        min-height: 320px;
+      }
+      #sidebar {
+        max-height: none;
+      }
+    }
+
+    /* Leaflet darkish tweaks */
+    .leaflet-control-attribution {
+      background: rgba(0,0,0,0.4) !important;
+      color: #cbd5e1 !important;
+      backdrop-filter: blur(6px);
+      border-radius: 6px;
+      padding: 0 6px !important;
+    }
+
+    /* Aviso cuando no corre JS (como en la vista previa de Archivos en iOS) */
+    #js-warning {
+      margin: 12px;
+      border: 1px solid #f59e0b33;
+      background: #f59e0b1a;
+      color: #fde68a;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Itinerario de Guadalajara</h1>
+    <div class="sub">Mapa interactivo + tablas por día (Android / iPhone)</div>
+  </header>
+
+  <main id="app">
+    <div id="js-warning">
+      Este visor no ejecuta JavaScript. Para ver el mapa interactivo, abre este archivo en Safari o Chrome (botón Compartir → Abrir en Safari/Chrome) o súbelo a un hosting y ábrelo desde el navegador.
+    </div>
+    <div id="map" aria-label="Mapa interactivo"></div>
+    <aside id="sidebar" aria-label="Listado por día"></aside>
+  </main>
+
+  <script>
+    // Ocultar el aviso si JS está activo (navegadores como Safari/Chrome)
+    const jsWarn = document.getElementById('js-warning');
+    if (jsWarn) jsWarn.style.display = 'none';
+    // Datos del itinerario (agrupados por día)
+    const itinerary = [
+      {
+        day: 1,
+        title: "Centro Histórico",
+        color: "red",
+        places: [
+          { name: "Plaza de Armas", lat: 20.6767, lng: -103.3475 },
+          { name: "Catedral Metropolitana", lat: 20.6764, lng: -103.3472 },
+          { name: "Rotonda de los Jaliscienses Ilustres", lat: 20.6773, lng: -103.3468 },
+          { name: "Teatro Degollado", lat: 20.6770, lng: -103.3455 },
+          { name: "Mercado Libertad (San Juan de Dios)", lat: 20.6739, lng: -103.3386 },
+          { name: "Plaza Tapatía", lat: 20.6752, lng: -103.3430 },
+          { name: "Hospicio Cabañas", lat: 20.6741, lng: -103.3382 },
+        ],
+      },
+      {
+        day: 2,
+        title: "Arte y Cultura",
+        color: "blue",
+        places: [
+          { name: "Museo Cabañas", lat: 20.6741, lng: -103.3382 },
+          { name: "Parque Morelos", lat: 20.6783, lng: -103.3390 },
+          { name: "Museo de las Artes (MUSA)", lat: 20.6730, lng: -103.3611 },
+          { name: "Avenida Chapultepec", lat: 20.6736, lng: -103.3700 },
+        ],
+      },
+      {
+        day: 3,
+        title: "Naturaleza y Mercados",
+        color: "green",
+        places: [
+          { name: "Parque Metropolitano", lat: 20.6769, lng: -103.4440 },
+          { name: "Mercado de Abastos", lat: 20.6465, lng: -103.3916 },
+          { name: "Mercado Alcalde", lat: 20.6820, lng: -103.3465 },
+          { name: "La Tequila Restaurante", lat: 20.6960, lng: -103.4023 },
+          { name: "Santo Coyote Restaurante", lat: 20.6988, lng: -103.3739 },
+        ],
+      },
+      {
+        day: 4,
+        title: "Historia y Barrios",
+        color: "orange",
+        places: [
+          { name: "Barrio de San Juan de Dios", lat: 20.6750, lng: -103.3390 },
+          { name: "Templo de San Francisco de Asís", lat: 20.6788, lng: -103.3438 },
+          { name: "Calzada Independencia", lat: 20.6795, lng: -103.3412 },
+          { name: "Panteón de Belén", lat: 20.6841, lng: -103.3580 },
+          { name: "Café Benito", lat: 20.6748, lng: -103.3480 },
+        ],
+      },
+      {
+        day: 5,
+        title: "Gastronomía y Compras",
+        color: "purple",
+        places: [
+          { name: "Mercado Corona", lat: 20.6749, lng: -103.3492 },
+          { name: "Andares", lat: 20.7092, lng: -103.4154 },
+          { name: "Galerías Guadalajara", lat: 20.6734, lng: -103.4281 },
+          { name: "Museo del Periodismo y las Artes Gráficas", lat: 20.6761, lng: -103.3494 },
+          { name: "Restaurante Hueso", lat: 20.6753, lng: -103.3822 },
+          { name: "Restaurante Alcalde", lat: 20.6730, lng: -103.3790 },
+        ],
+      },
+    ];
+
+    // Inicializar mapa
+    const map = L.map("map", {
+      center: [20.6736, -103.3440],
+      zoom: 13,
+      zoomControl: true,
+      preferCanvas: false,
+    });
+
+    const tiles = L.tileLayer(
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {
+        attribution:
+          'Datos © <a href="https://openstreetmap.org">OpenStreetMap</a> · Uso ODbL',
+        maxZoom: 19,
+      }
+    ).addTo(map);
+
+    // Helpers para crear marcadores con color
+    function createColoredMarker(lat, lng, color, popupHtml) {
+      let marker;
+      if (L.AwesomeMarkers) {
+        const icon = L.AwesomeMarkers.icon({
+          icon: 'info-sign',
+          prefix: 'glyphicon',
+          markerColor: color,
+          iconColor: 'white',
+          extraClasses: 'fa-rotate-0',
+        });
+        marker = L.marker([lat, lng], { icon });
+      } else {
+        // Fallback sin AwesomeMarkers
+        marker = L.circleMarker([lat, lng], {
+          radius: 8,
+          color: '#000',
+          opacity: 0.9,
+          weight: 1,
+          fillColor: color,
+          fillOpacity: 0.9,
+        });
+      }
+      if (popupHtml) marker.bindPopup(popupHtml);
+      return marker;
+    }
+
+    const markersById = {};
+    const allLatLngs = [];
+
+    // Construir marcadores desde el arreglo y agregarlos al mapa
+    for (const day of itinerary) {
+      day.places.forEach((place, idx) => {
+        const id = `d${day.day}-i${idx}`;
+        place.__id = id;
+        const popup = `<strong>Día ${day.day} - ${day.title}</strong><br/>${place.name}`;
+        const marker = createColoredMarker(place.lat, place.lng, day.color, popup).addTo(map);
+        markersById[id] = marker;
+        allLatLngs.push([place.lat, place.lng]);
+      });
+    }
+
+    // Ajustar el mapa para ver todos los puntos
+    if (allLatLngs.length > 0) {
+      map.fitBounds(L.latLngBounds(allLatLngs), { padding: [20, 20] });
+    }
+
+    // Construir el sidebar con tablas por día
+    const sidebar = document.getElementById('sidebar');
+
+    function toGMapsUrl(lat, lng) {
+      return `https://www.google.com/maps?q=${lat},${lng}`;
+    }
+
+    function focusMarker(id) {
+      const m = markersById[id];
+      if (!m) return;
+      const latlng = m.getLatLng ? m.getLatLng() : m._latlng;
+      map.setView(latlng, Math.max(map.getZoom(), 15), { animate: true });
+      if (m.openPopup) m.openPopup();
+    }
+
+    function colorToHex(color) {
+      // Aproximación de colores de AwesomeMarkers a tonos
+      switch (color) {
+        case 'red': return '#ef4444';
+        case 'blue': return '#3b82f6';
+        case 'green': return '#22c55e';
+        case 'orange': return '#f59e0b';
+        case 'purple': return '#8b5cf6';
+        default: return '#93c5fd';
+      }
+    }
+
+    function renderSidebar() {
+      sidebar.innerHTML = '';
+      itinerary.forEach((day, dIndex) => {
+        const openAttr = dIndex === 0 ? ' open' : '';
+        const block = document.createElement('details');
+        block.className = 'day-block';
+        if (openAttr) block.setAttribute('open', '');
+
+        const summary = document.createElement('summary');
+        const left = document.createElement('div');
+        const right = document.createElement('div');
+        right.className = 'summary-sub';
+        left.innerHTML = `
+          <span class="color-dot" style="background:${colorToHex(day.color)}"></span>
+          <span class="summary-title">Día ${day.day} · ${day.title}</span>
+        `;
+        right.textContent = `${day.places.length} lugares`;
+        summary.appendChild(left);
+        summary.appendChild(right);
+        block.appendChild(summary);
+
+        const wrap = document.createElement('div');
+        wrap.className = 'table-wrap';
+        const table = document.createElement('table');
+        table.innerHTML = `
+          <thead>
+            <tr>
+              <th>Lugar</th>
+              <th style="width: 160px;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        `;
+        const tbody = table.querySelector('tbody');
+
+        day.places.forEach((p, idx) => {
+          const tr = document.createElement('tr');
+          const nameTd = document.createElement('td');
+          nameTd.textContent = p.name;
+
+          const actionsTd = document.createElement('td');
+          actionsTd.className = 'actions';
+
+          const btnIr = document.createElement('button');
+          btnIr.textContent = 'Ver en mapa';
+          btnIr.addEventListener('click', () => focusMarker(p.__id));
+
+          const aGmaps = document.createElement('a');
+          aGmaps.textContent = 'Google Maps';
+          aGmaps.href = toGMapsUrl(p.lat, p.lng);
+          aGmaps.target = '_blank';
+          aGmaps.rel = 'noopener';
+
+          actionsTd.appendChild(btnIr);
+          actionsTd.appendChild(aGmaps);
+
+          tr.appendChild(nameTd);
+          tr.appendChild(actionsTd);
+
+          tr.addEventListener('click', (ev) => {
+            // Evitar doble navegación si se hace click en el link
+            if (ev.target.tagName.toLowerCase() === 'a') return;
+            focusMarker(p.__id);
+          });
+
+          tbody.appendChild(tr);
+        });
+
+        wrap.appendChild(table);
+        block.appendChild(wrap);
+        sidebar.appendChild(block);
+      });
+    }
+
+    renderSidebar();
+  </script>
+</body>
+</html>
+
+
